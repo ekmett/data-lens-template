@@ -6,7 +6,7 @@ routine to scour data type definitions and generate
 accessor objects for them automatically.
 -}
 module Data.Lens.Template (
-   nameMakeLens, makeLenses, makeLens,
+   nameMakeLens, makeLenses, makeLens, decMakeLens
    ) where
 
 import Language.Haskell.TH.Syntax
@@ -78,21 +78,20 @@ nameMakeLens t namer = do
     info <- reify t
     reified <- case info of
                     TyConI dec -> return dec
-                    _ -> fail errmsg
-    (params, cons) <- case reified of
+                    _ -> fail $ errmsg t
+    decMakeLens t reified namer
+
+decMakeLens :: Name -> Dec -> (String -> Maybe String) -> Q [Dec]
+decMakeLens t dec namer = do
+    (params, cons) <- case dec of
                  DataD _ _ params cons' _ -> return (params, cons')
                  NewtypeD _ _ params con' _ -> return (params, [con'])
-                 _ -> fail errmsg
+                 _ -> fail $ errmsg t
     decs <- makeAccs params . nub $ concatMap namedFields cons
     when (null decs) $ qReport False nodefmsg
     return decs
 
     where
-
-    errmsg = "Cannot derive accessors for name " ++ show t ++ " because"
-          ++ "\n it is not a type declared with 'data' or 'newtype'"
-          ++ "\n Did you remember to double-tick the type as in"
-          ++ "\n $(makeLenses ''TheType)?"
 
     nodefmsg = "Warning: No accessors generated from the name " ++ show t
           ++ "\n If you are using makeLenses rather than"
@@ -134,3 +133,10 @@ nameMakeLens t namer = do
           ]
 
 #endif
+
+errmsg t = "Cannot derive accessors for name " ++ show t ++ " because"
+         ++ "\n it is not a type declared with 'data' or 'newtype'"
+         ++ "\n Did you remember to double-tick the type as in"
+         ++ "\n $(makeLenses ''TheType)?"
+
+
